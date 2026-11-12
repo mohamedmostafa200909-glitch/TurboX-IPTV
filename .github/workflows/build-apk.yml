@@ -14,12 +14,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Find Project Directory
+        id: find-dir
+        run: |
+          # البحث عن مكان وجود ملف package.json
+          PKG_PATH=$(find . -name "package.json" -not -path "*/node_modules/*" | head -n 1)
+          if [ -z "$PKG_PATH" ]; then
+            echo "Error: package.json not found!"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$PKG_PATH")
+          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+          echo "Found project at: $PROJECT_DIR"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Install Dependencies
+        working-directory: ${{ steps.find-dir.outputs.project_dir }}
         run: |
           npm install --legacy-peer-deps
 
@@ -34,16 +48,16 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Grant Execute Permission to Gradlew
-        run: chmod +x android/gradlew
+        working-directory: ${{ steps.find-dir.outputs.project_dir }}/android
+        run: chmod +x gradlew
 
       - name: Build Android Debug APK
-        run: |
-          cd android
-          ./gradlew assembleDebug --stacktrace --no-daemon
+        working-directory: ${{ steps.find-dir.outputs.project_dir }}/android
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         if: success()
         with:
           name: app-debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: ${{ steps.find-dir.outputs.project_dir }}/android/app/build/outputs/apk/debug/*.apk
